@@ -50,7 +50,7 @@ function setup() {
   // Offscreen buffer matches video resolution.
   // Starts filled solid gray; holes are punched into it as noses move.
   gfx = createGraphics(VID_W, VID_H);
-  gfx.background(120);
+  gfx.background(0);
 
   // Init MoveNet with mirror mode and support for up to 2 people.
   // detectStart is called inside the callback so detection only begins once
@@ -67,17 +67,25 @@ function windowResized() {
 
 // ─── Input ────────────────────────────────────────────────────────────────────
 
-function mousePressed() {
-  if (!started) {
-    // Hit-test the START button (same geometry as drawSplash)
+function _hitTestStart(x, y) {
+  if (!started && modelReady) {
     const bw = 200, bh = 54;
     const bx = width / 2 - bw / 2;
-    const by = height / 2 + 20;
-    if (mouseX >= bx && mouseX <= bx + bw && mouseY >= by && mouseY <= by + bh) {
+    const by = height / 2 + 26;
+    if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) {
       initAudio(); // AudioContext must be created inside a user gesture
       started = true;
     }
   }
+}
+
+function mousePressed() {
+  _hitTestStart(mouseX, mouseY);
+}
+
+function touchStarted() {
+  if (touches.length > 0) _hitTestStart(touches[0].x, touches[0].y);
+  return false; // prevent scroll/zoom on mobile
 }
 
 // ─── Draw ─────────────────────────────────────────────────────────────────────
@@ -88,14 +96,24 @@ function draw() {
     return;
   }
 
+  // Cover-fit: scale video to fill canvas, crop the overflow
+  const coverScale = Math.max(width / VID_W, height / VID_H);
+  const scaledW = VID_W * coverScale;
+  const scaledH = VID_H * coverScale;
+  const offsetX = (width - scaledW) / 2;
+  const offsetY = (height - scaledH) / 2;
+
+  background(0); // clear letterbox/pillarbox areas
+
   // 1. Draw the mirrored webcam feed scaled to fill the canvas
   push();
   translate(width, 0);
   scale(-1, 1);
-  image(video, 0, 0, width, height);
+  image(video, offsetX, offsetY, scaledW, scaledH);
   pop();
 
   if (!modelReady) {
+    image(gfx, offsetX, offsetY, scaledW, scaledH);
     fill(255);
     noStroke();
     textSize(18);
@@ -159,9 +177,9 @@ function draw() {
     }
   }
 
-  // 3. Restore normal compositing and draw the gray mask (with holes) over the video
+  // 3. Restore normal compositing and draw the mask (with holes) over the video
   gfx.drawingContext.globalCompositeOperation = 'source-over';
-  image(gfx, 0, 0, width, height);
+  image(gfx, offsetX, offsetY, scaledW, scaledH);
 }
 
 // ─── Splash screen ────────────────────────────────────────────────────────────
@@ -181,10 +199,9 @@ function drawSplash() {
   const flicker = sin(frameCount * 0.3) * 3; // subtle title flicker
 
   // Group all splash content around the vertical centre
-  const titleY    = cy - 80;
-  const subtitleY = cy - 30;
-  const buttonY   = cy + 20;
-  const statusY   = cy + 100;
+  const titleY  = cy - 54;
+  const buttonY = cy + 26;
+  const statusY = cy + 102;
 
   // Title drop shadow
   noStroke();
@@ -192,43 +209,51 @@ function drawSplash() {
   textAlign(CENTER, CENTER);
   textSize(64);
   textStyle(BOLD);
-  text('FACE ERASER!', cx + 4 + flicker, titleY + 4);
+  text('FACE ERASER', cx + 4 + flicker, titleY + 4);
 
   // Title
   fill(255, 220, 0);
-  text('FACE ERASER!', cx + flicker, titleY);
+  text('FACE ERASER', cx + flicker, titleY);
 
-  // Subtitle
-  textSize(16);
-  textStyle(NORMAL);
-  fill(180, 255, 180);
-  text('use your nose to reveal the video', cx, subtitleY);
-
-  // Pulsing START button
-  const pulse = sin(frameCount * 0.08) * 0.15 + 0.85;
   const bw = 200, bh = 54;
   const bx = cx - bw / 2;
   const by = buttonY;
 
-  // Button glow halo
-  fill(255, 220, 0, 40 * pulse);
-  rect(bx - 6, by - 6, bw + 12, bh + 12, 10);
+  if (modelReady) {
+    // Pulsing active button
+    const pulse = sin(frameCount * 0.08) * 0.15 + 0.85;
 
-  // Button body
-  fill(lerpColor(color(180, 140, 0), color(255, 220, 0), pulse));
-  rect(bx, by, bw, bh, 6);
+    // Button glow halo
+    fill(255, 220, 0, 40 * pulse);
+    rect(bx - 6, by - 6, bw + 12, bh + 12, 10);
 
-  // Button label
-  fill(20);
+    // Button body
+    fill(lerpColor(color(180, 140, 0), color(255, 220, 0), pulse));
+    rect(bx, by, bw, bh, 6);
+
+    // Button label
+    fill(20);
+  } else {
+    // Greyed-out inactive button
+    fill(60, 60, 60);
+    rect(bx, by, bw, bh, 6);
+
+    // Button label
+    fill(120);
+
+    // 'loading...' status text — styled to match title
+    const dots = '.'.repeat(floor(frameCount / 20) % 3 + 1);
+    const loadingText = 'loading' + dots;
+    fill(255, 220, 0);
+    textSize(16);
+    textStyle(BOLD);
+    text(loadingText, cx, statusY);
+    fill(120); // for the button label below
+  }
+
   textSize(22);
   textStyle(BOLD);
   text('START', cx, by + bh / 2 + 1);
-
-  // Model loading status
-  textStyle(NORMAL);
-  textSize(13);
-  fill(modelReady ? color(100, 255, 100) : color(200, 200, 100));
-  text(modelReady ? 'model ready' : 'loading model...', cx, statusY);
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
