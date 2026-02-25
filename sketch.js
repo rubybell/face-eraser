@@ -97,10 +97,21 @@ function draw() {
     return;
   }
 
+  // Use actual camera resolution — may differ from VID_W/VID_H on mobile
+  const vidW = video.elt.videoWidth  || VID_W;
+  const vidH = video.elt.videoHeight || VID_H;
+
+  // Lazily recreate gfx at the real camera resolution once the video has loaded.
+  // This ensures holes are circular (not elliptical) and coordinates need no scaling.
+  if (vidW !== gfx.width || vidH !== gfx.height) {
+    gfx = createGraphics(vidW, vidH);
+    gfx.background(0);
+  }
+
   // Cover-fit: scale video to fill canvas, crop the overflow
-  const coverScale = Math.max(width / VID_W, height / VID_H);
-  const scaledW = VID_W * coverScale;
-  const scaledH = VID_H * coverScale;
+  const coverScale = Math.max(width / vidW, height / vidH);
+  const scaledW = vidW * coverScale;
+  const scaledH = vidH * coverScale;
   const offsetX = (width - scaledW) / 2;
   const offsetY = (height - scaledH) / 2;
 
@@ -137,11 +148,8 @@ function draw() {
       const nose = getNose(pose);
       if (nose && nose.confidence > CONFIDENCE_THRESHOLD) {
 
-        // Erase a circle from the gray mask at the nose position.
-        // Scale from actual camera resolution to gfx buffer resolution in case they differ.
-        const vidW = video.elt.videoWidth  || VID_W;
-        const vidH = video.elt.videoHeight || VID_H;
-        gfx.circle(nose.x * (VID_W / vidW), nose.y * (VID_H / vidH), ERASER_SIZE);
+        // Erase a circle from the gray mask at the nose position
+        gfx.circle(nose.x, nose.y, ERASER_SIZE);
 
         // Update the squeak oscillator for this person
         if (audioCtx && sq) {
