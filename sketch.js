@@ -43,8 +43,9 @@ function setup() {
   createCanvas(windowWidth, windowHeight);
 
   // Capture webcam at native resolution; keep the element hidden
-  video = createCapture(VIDEO);
-  video.size(VID_W, VID_H);
+  video = createCapture({
+    video: { facingMode: 'user', width: { ideal: VID_W }, height: { ideal: VID_H } }
+  });
   video.hide();
 
   // Offscreen buffer matches video resolution.
@@ -136,8 +137,11 @@ function draw() {
       const nose = getNose(pose);
       if (nose && nose.confidence > CONFIDENCE_THRESHOLD) {
 
-        // Erase a circle from the gray mask at the nose position
-        gfx.circle(nose.x, nose.y, ERASER_SIZE);
+        // Erase a circle from the gray mask at the nose position.
+        // Scale from actual camera resolution to gfx buffer resolution in case they differ.
+        const vidW = video.elt.videoWidth  || VID_W;
+        const vidH = video.elt.videoHeight || VID_H;
+        gfx.circle(nose.x * (VID_W / vidW), nose.y * (VID_H / vidH), ERASER_SIZE);
 
         // Update the squeak oscillator for this person
         if (audioCtx && sq) {
