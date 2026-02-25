@@ -9,8 +9,10 @@ const VID_H = 480;               // webcam capture height
 
 let video;        // p5 video capture element
 let bodyPose;     // ml5 bodyPose instance
-let poses = [];   // latest array of detected poses (up to 2)
+let poses = [];            // latest array of detected poses (up to 2)
+let poseCallCount = 0;    // how many times gotPoses has been called (debug)
 let modelReady = false;
+let detectionStarted = false; // deferred until video has data
 let gfx;          // offscreen graphics buffer — holds the gray mask with erased holes
 let started = false; // whether the user has clicked Start
 
@@ -58,7 +60,7 @@ function setup() {
   // the model has fully loaded.
   bodyPose = ml5.bodyPose('MoveNet', { maxPoses: 2, flipped: true }, () => {
     modelReady = true;
-    bodyPose.detectStart(video, gotPoses);
+    // detectStart is deferred to draw() so we know the video has frames ready
   });
 }
 
@@ -95,6 +97,12 @@ function draw() {
   if (!started) {
     drawSplash();
     return;
+  }
+
+  // Start detection once both the model and at least one video frame are ready
+  if (!detectionStarted && modelReady && video.elt.readyState >= 2) {
+    bodyPose.detectStart(video, gotPoses);
+    detectionStarted = true;
   }
 
   // Use actual camera resolution — may differ from VID_W/VID_H on mobile
@@ -192,6 +200,26 @@ function draw() {
   // 3. Restore normal compositing and draw the mask (with holes) over the video
   gfx.drawingContext.globalCompositeOperation = 'source-over';
   image(gfx, offsetX, offsetY, scaledW, scaledH);
+
+  // ── DEBUG OVERLAY (remove when done) ──────────────────────────────────────
+  const nose0 = poses[0] ? getNose(poses[0]) : null;
+  const debugLines = [
+    `video: ${vidW}x${vidH}`,
+    `gfx:   ${gfx.width}x${gfx.height}`,
+    `poses: ${poses.length}  (cb: ${poseCallCount})`,
+    nose0 ? `nose:  ${nose0.x.toFixed(0)},${nose0.y.toFixed(0)}  c=${nose0.confidence.toFixed(2)}` : 'nose:  –',
+  ];
+  noStroke();
+  textAlign(LEFT, TOP);
+  textStyle(NORMAL);
+  textSize(13);
+  debugLines.forEach((line, i) => {
+    fill(0, 0, 0, 140);
+    rect(8, 8 + i * 18, textWidth(line) + 8, 16);
+    fill(255, 255, 0);
+    text(line, 12, 10 + i * 18);
+  });
+  // ──────────────────────────────────────────────────────────────────────────
 }
 
 // ─── Splash screen ────────────────────────────────────────────────────────────
@@ -281,4 +309,5 @@ function getNose(pose) {
 // ml5 callback — called continuously with the latest pose detections.
 function gotPoses(results) {
   poses = results;
+  poseCallCount++;
 }
