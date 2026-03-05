@@ -5,6 +5,11 @@ const CONFIDENCE_THRESHOLD = 0.3; // minimum keypoint confidence to use a pose
 const VID_W = 640;               // webcam capture width
 const VID_H = 480;               // webcam capture height
 
+// ─── Mobile detection ─────────────────────────────────────────────────────────
+
+const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
+  || navigator.maxTouchPoints > 1;
+
 // ─── State ────────────────────────────────────────────────────────────────────
 
 let video;        // p5 video capture element
@@ -41,6 +46,9 @@ function initAudio() {
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
+
+  // If on mobile, skip all setup — nothing else is needed
+  if (isMobile) return;
 
   // Capture webcam at native resolution; keep the element hidden
   video = createCapture(VIDEO);
@@ -91,6 +99,12 @@ function touchStarted() {
 // ─── Draw ─────────────────────────────────────────────────────────────────────
 
 function draw() {
+  // Mobile: show a friendly message and nothing else
+  if (isMobile) {
+    drawMobileMessage();
+    return;
+  }
+
   if (!started) {
     drawSplash();
     return;
@@ -180,6 +194,22 @@ function draw() {
   // 3. Restore normal compositing and draw the mask (with holes) over the video
   gfx.drawingContext.globalCompositeOperation = 'source-over';
   image(gfx, offsetX, offsetY, scaledW, scaledH);
+}
+
+// ─── Mobile message ───────────────────────────────────────────────────────────
+
+function drawMobileMessage() {
+  background(20);
+  fill(255, 220, 0);
+  noStroke();
+  textAlign(CENTER, CENTER);
+  textSize(22);
+  textStyle(BOLD);
+  text('Sorry, this doesn\'t work on mobile yet!', width / 2, height / 2 - 20);
+  textSize(16);
+  textStyle(NORMAL);
+  fill(200);
+  text('Try opening it on a desktop instead.', width / 2, height / 2 + 20);
 }
 
 // ─── Splash screen ────────────────────────────────────────────────────────────
